@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>在庫・貸出管理</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="app-header">
+    <h1>在庫・貸出管理</h1>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" role="tab" data-tab="inventory" aria-selected="true">📦 在庫</button>
+      <button class="tab" role="tab" data-tab="loans" aria-selected="false">🔁 貸出・レンタル</button>
+      <button class="tab" role="tab" data-tab="calendar" aria-selected="false">📅 カレンダー</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- 在庫タブ -->
+    <section id="tab-inventory" class="panel active" role="tabpanel">
+      <div class="summary" id="inv-summary"></div>
+      <div class="toolbar">
+        <input type="search" id="inv-search" placeholder="品名・カテゴリ・保管場所で検索">
+        <select id="inv-category"><option value="">すべてのカテゴリ</option></select>
+        <button class="primary" id="btn-add-item">＋ 品目を追加</button>
+      </div>
+      <div class="table-wrap">
+        <table class="list">
+          <thead>
+            <tr><th>品名</th><th>カテゴリ</th><th>保管場所</th><th class="num">総数</th><th class="num">貸出中</th><th class="num">在庫</th><th></th></tr>
+          </thead>
+          <tbody id="inv-body"></tbody>
+        </table>
+      </div>
+      <p class="empty" id="inv-empty" hidden>品目がまだありません。「＋ 品目を追加」から登録してください。</p>
+    </section>
+
+    <!-- 貸出タブ -->
+    <section id="tab-loans" class="panel" role="tabpanel">
+      <div class="summary" id="loan-summary"></div>
+      <div class="toolbar">
+        <div class="filters" id="loan-filters">
+          <button class="chip active" data-filter="active">貸出中</button>
+          <button class="chip" data-filter="upcoming">予約</button>
+          <button class="chip" data-filter="overdue">延滞</button>
+          <button class="chip" data-filter="returned">返却済</button>
+          <button class="chip" data-filter="all">すべて</button>
+        </div>
+        <button class="primary" id="btn-add-loan">＋ 貸出・予約を登録</button>
+      </div>
+      <div class="table-wrap">
+        <table class="list">
+          <thead>
+            <tr><th>状態</th><th>種別</th><th>品名</th><th class="num">数量</th><th>相手</th><th>期間</th><th class="num">料金</th><th></th></tr>
+          </thead>
+          <tbody id="loan-body"></tbody>
+        </table>
+      </div>
+      <p class="empty" id="loan-empty" hidden>該当する貸出はありません。</p>
+    </section>
+
+    <!-- カレンダータブ -->
+    <section id="tab-calendar" class="panel" role="tabpanel">
+      <div class="cal-head">
+        <button id="cal-prev" aria-label="前の月">‹</button>
+        <h2 id="cal-title"></h2>
+        <button id="cal-next" aria-label="次の月">›</button>
+        <button id="cal-today" class="ghost">今日</button>
+      </div>
+      <div class="legend">
+        <span><i class="dot rent"></i>レンタル</span>
+        <span><i class="dot lend"></i>貸出</span>
+        <span><i class="dot borrow"></i>借用</span>
+        <span><i class="dot overdue"></i>延滞</span>
+        <span>▶ 開始　■ 返却期限</span>
+      </div>
+      <div class="cal-grid" id="cal-weekdays"></div>
+      <div class="cal-grid" id="cal-days"></div>
+      <div class="day-detail" id="day-detail"></div>
+    </section>
+  </main>
+
+  <!-- 品目ダイアログ -->
+  <dialog id="dlg-item">
+    <form method="dialog" id="form-item">
+      <h3 id="dlg-item-title">品目を追加</h3>
+      <label>品名<input name="name" required></label>
+      <label>カテゴリ<input name="category" list="category-list" placeholder="例：カメラ、工具"></label>
+      <datalist id="category-list"></datalist>
+      <label>保管場所<input name="location" placeholder="例：倉庫A-2"></label>
+      <label>総数<input name="qty" type="number" min="0" value="1" required></label>
+      <label>1日あたりのレンタル料（任意）<input name="rate" type="number" min="0" placeholder="円"></label>
+      <label>メモ<textarea name="note" rows="2"></textarea></label>
+      <div class="actions">
+        <button value="cancel" formnovalidate class="ghost">キャンセル</button>
+        <button value="save" class="primary">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- 貸出ダイアログ -->
+  <dialog id="dlg-loan">
+    <form method="dialog" id="form-loan">
+      <h3 id="dlg-loan-title">貸出・予約を登録</h3>
+      <label>種別
+        <select name="type">
+          <option value="rent">レンタル（有料で貸す）</option>
+          <option value="lend">貸出（無料で貸す）</option>
+          <option value="borrow">借用（他から借りる）</option>
+        </select>
+      </label>
+      <label>品目<select name="itemId" required></select></label>
+      <label>数量<input name="qty" type="number" min="1" value="1" required></label>
+      <label>相手（名前・会社）<input name="person" required></label>
+      <label>連絡先（任意）<input name="contact"></label>
+      <div class="row">
+        <label>開始日<input name="start" type="date" required></label>
+        <label>返却予定日<input name="end" type="date" required></label>
+      </div>
+      <label>料金（任意）<input name="price" type="number" min="0" placeholder="円"></label>
+      <p class="hint" id="loan-availability"></p>
+      <label>メモ<textarea name="note" rows="2"></textarea></label>
+      <div class="actions">
+        <button value="cancel" formnovalidate class="ghost">キャンセル</button>
+        <button value="save" class="primary">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
