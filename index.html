@@ -2,128 +2,198 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>在庫・貸出管理</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>カメラ貸出台帳</title>
+  <meta name="description" content="カメラの在庫・貸出・予約をチームで管理する台帳アプリ">
+  <meta name="theme-color" content="#0f7c8c">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Space+Grotesk:wght@500;600;700&display=swap">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header class="app-header">
-    <h1>在庫・貸出管理</h1>
+<header>
+  <div class="wrap">
+    <div class="brand"><h1>カメラ貸出台帳</h1><span class="sync" id="sync">読み込み中…</span><button class="small ghost who-btn" id="btn-who">操作者：<b id="who-name">未選択</b></button><button class="small ghost set-btn" id="btn-settings">設定</button></div>
     <nav class="tabs" role="tablist">
-      <button class="tab active" role="tab" data-tab="inventory" aria-selected="true">📦 在庫</button>
-      <button class="tab" role="tab" data-tab="loans" aria-selected="false">🔁 貸出・レンタル</button>
-      <button class="tab" role="tab" data-tab="calendar" aria-selected="false">📅 カレンダー</button>
+      <button class="tab" role="tab" id="tab-btn-inventory" data-tab="inventory" aria-selected="true">在庫</button>
+      <button class="tab" role="tab" id="tab-btn-loans" data-tab="loans" aria-selected="false">貸出・レンタル</button>
+      <button class="tab" role="tab" id="tab-btn-calendar" data-tab="calendar" aria-selected="false">カレンダー</button>
+      <button class="tab" role="tab" id="tab-btn-staff" data-tab="staff" aria-selected="false">担当者</button>
     </nav>
-  </header>
+  </div>
+</header>
 
-  <main>
-    <!-- 在庫タブ -->
-    <section id="tab-inventory" class="panel active" role="tabpanel">
-      <div class="summary" id="inv-summary"></div>
-      <div class="toolbar">
-        <input type="search" id="inv-search" placeholder="SKU・カテゴリ・保管場所で検索">
-        <select id="inv-category"><option value="">すべてのカテゴリ</option></select>
-        <button class="primary" id="btn-add-item">＋ SKUを追加</button>
-      </div>
-      <div class="table-wrap">
-        <table class="list">
-          <thead>
-            <tr><th>SKU</th><th>カテゴリ</th><th>保管場所</th><th class="num">総数</th><th class="num">貸出中</th><th class="num">在庫</th><th></th></tr>
-          </thead>
-          <tbody id="inv-body"></tbody>
-        </table>
-      </div>
-      <p class="empty" id="inv-empty" hidden>SKUがまだありません。「＋ SKUを追加」から登録してください。</p>
-    </section>
+<main><div class="wrap">
+  <div class="banner" id="demo-banner" hidden><span>まだ共有データにつながっていません。このパソコンの中だけで動く「お試しモード」です。</span><button class="small primary" id="btn-banner-settings">接続設定を開く</button></div>
+  <section id="tab-inventory" class="panel" role="tabpanel">
+    <div class="summary" id="inv-summary"></div>
+    <div class="toolbar">
+      <input type="search" id="inv-search" placeholder="製品名・保管場所で検索">
+      <button class="primary" id="btn-add-item">＋ 製品を追加</button>
+    </div>
+    <div class="pgrid" id="inv-cards"></div>
+    <p class="empty" id="inv-empty" hidden>製品がまだありません。「＋ 製品を追加」から登録してください。</p>
+  </section>
 
-    <!-- 貸出タブ -->
-    <section id="tab-loans" class="panel" role="tabpanel">
-      <div class="summary" id="loan-summary"></div>
-      <div class="toolbar">
-        <div class="filters" id="loan-filters">
-          <button class="chip active" data-filter="active">貸出中</button>
-          <button class="chip" data-filter="upcoming">予約</button>
-          <button class="chip" data-filter="overdue">延滞</button>
-          <button class="chip" data-filter="returned">返却済</button>
-          <button class="chip" data-filter="all">すべて</button>
-        </div>
-        <button class="primary" id="btn-add-loan">＋ 貸出・予約を登録</button>
+  <section id="tab-loans" class="panel" role="tabpanel" hidden>
+    <div class="summary" id="loan-summary"></div>
+    <div class="toolbar">
+      <div class="filters" id="loan-filters">
+        <button class="chip" data-filter="active" aria-pressed="true">貸出中</button>
+        <button class="chip" data-filter="upcoming" aria-pressed="false">予約</button>
+        <button class="chip" data-filter="overdue" aria-pressed="false">延滞</button>
+        <button class="chip" data-filter="returned" aria-pressed="false">返却済</button>
+        <button class="chip" data-filter="all" aria-pressed="false">すべて</button>
       </div>
-      <div class="table-wrap">
-        <table class="list">
-          <thead>
-            <tr><th>状態</th><th>種別</th><th>SKU</th><th class="num">数量</th><th>相手</th><th>期間</th><th></th></tr>
-          </thead>
-          <tbody id="loan-body"></tbody>
-        </table>
-      </div>
-      <p class="empty" id="loan-empty" hidden>該当する貸出はありません。</p>
-    </section>
+      <select id="loan-item" aria-label="製品で絞り込み"><option value="">すべての製品</option></select>
+      <select id="loan-staff" aria-label="担当者で絞り込み"><option value="">すべての担当者</option></select>
+      <button class="primary" id="btn-add-loan">＋ 貸出・予約を登録</button>
+    </div>
+    <div class="llist-head"><span class="sub" id="loan-count"></span><button class="small" id="btn-copy-loans">一覧をテキストでコピー</button></div>
+    <div class="llist" id="loan-body"></div>
+    <p class="empty llist-empty" id="loan-empty" hidden>該当する貸出はありません。</p>
+    <textarea id="loan-copy-fallback" rows="6" readonly hidden aria-label="コピー用テキスト"></textarea>
+  </section>
 
-    <!-- カレンダータブ -->
-    <section id="tab-calendar" class="panel" role="tabpanel">
-      <div class="cal-head">
-        <button id="cal-prev" aria-label="前の月">‹</button>
-        <h2 id="cal-title"></h2>
-        <button id="cal-next" aria-label="次の月">›</button>
-        <button id="cal-today" class="ghost">今日</button>
-      </div>
-      <div class="legend">
-        <span><i class="dot rent"></i>レンタル</span>
-        <span><i class="dot borrow"></i>借用</span>
-        <span><i class="dot overdue"></i>延滞</span>
-        <span>▶ 開始　■ 返却期限</span>
-      </div>
-      <div class="cal-grid" id="cal-weekdays"></div>
-      <div class="cal-grid" id="cal-days"></div>
-      <div class="day-detail" id="day-detail"></div>
-    </section>
-  </main>
+  <section id="tab-staff" class="panel" role="tabpanel" hidden>
+    <div class="summary" id="staff-summary"></div>
+    <div class="toolbar">
+      <input id="staff-new" placeholder="新しい担当者の名前" aria-label="新しい担当者の名前" style="flex:1 1 200px;min-width:0">
+      <button class="primary" id="btn-add-staff">＋ 担当者を追加</button>
+    </div>
+    <div class="sgrid" id="staff-cards"></div>
+    <p class="empty" id="staff-empty" hidden>担当者がまだいません。上の欄から追加してください。</p>
+  </section>
 
-  <!-- 品目ダイアログ -->
-  <dialog id="dlg-item">
-    <form method="dialog" id="form-item">
-      <h3 id="dlg-item-title">SKUを追加</h3>
-      <label>SKU<input name="name" required></label>
-      <label>カテゴリ<input name="category" list="category-list" placeholder="例：カメラ、アクセサリ"></label>
-      <datalist id="category-list"></datalist>
-      <label>保管場所<input name="location" placeholder="例：倉庫A-2"></label>
-      <label>総数<input name="qty" type="number" min="0" value="1" required></label>
-      <label>メモ<textarea name="note" rows="2"></textarea></label>
-      <div class="actions">
-        <button value="cancel" formnovalidate class="ghost">キャンセル</button>
-        <button value="save" class="primary">保存</button>
-      </div>
-    </form>
-  </dialog>
+  <section id="tab-calendar" class="panel" role="tabpanel" hidden>
+    <div class="cal-head">
+      <button id="cal-prev" aria-label="前の月">‹</button>
+      <h2 id="cal-title"></h2>
+      <button id="cal-next" aria-label="次の月">›</button>
+      <button id="cal-today" class="ghost">今日</button>
+    </div>
+    <div class="pchips" id="cal-items"></div>
+    <div class="legend">
+      <span>色＝製品</span>
+      <span><i class="dot overdue"></i>延滞</span>
+      <span>借＝借用</span>
+      <span>▶ 開始　■ 返却期限</span>
+    </div>
+    <div class="cal-grid" id="cal-weekdays"></div>
+    <div class="cal-grid" id="cal-days"></div>
+    <div class="day-detail" id="day-detail"></div>
+  </section>
+</div></main>
 
-  <!-- 貸出ダイアログ -->
-  <dialog id="dlg-loan">
-    <form method="dialog" id="form-loan">
-      <h3 id="dlg-loan-title">貸出・予約を登録</h3>
-      <label>種別
-        <select name="type">
-          <option value="rent">レンタル（無料で貸す）</option>
-          <option value="borrow">借用（他から借りる）</option>
-        </select>
-      </label>
-      <label>SKU<select name="itemId" required></select></label>
-      <label>数量<input name="qty" type="number" min="1" value="1" required></label>
-      <label>相手（名前・会社）<input name="person" required></label>
-      <label>連絡先（任意）<input name="contact"></label>
-      <div class="row">
-        <label>開始日<input name="start" type="date" required></label>
-        <label>返却予定日<input name="end" type="date" required></label>
-      </div>
-      <p class="hint" id="loan-availability"></p>
-      <label>メモ<textarea name="note" rows="2"></textarea></label>
-      <div class="actions">
-        <button value="cancel" formnovalidate class="ghost">キャンセル</button>
-        <button value="save" class="primary">保存</button>
-      </div>
-    </form>
-  </dialog>
+<dialog id="dlg-item">
+  <form method="dialog" id="form-item">
+    <h3 id="dlg-item-title">製品を追加</h3>
+    <label>製品名<input id="f-item-name" name="name" required></label>
+    <label>カテゴリ<input id="f-item-category" name="category" list="category-list" placeholder="例：カメラ、アクセサリ"></label>
+    <datalist id="category-list"></datalist>
+    <label>保管場所<input id="f-item-location" name="location" placeholder="例：棚A-2"></label>
+    <label>総数<input id="f-item-qty" name="qty" type="number" min="0" value="1" required></label>
+    <label>メモ<textarea id="f-item-note" name="note" rows="2"></textarea></label>
+    <div class="dlg-actions">
+      <button value="delete" formnovalidate class="ghost danger left" id="btn-item-delete">この製品を削除</button>
+      <button value="cancel" formnovalidate class="ghost">キャンセル</button>
+      <button value="save" class="primary">保存</button>
+    </div>
+  </form>
+</dialog>
 
-  <script src="app.js"></script>
+<dialog id="dlg-loan">
+  <form method="dialog" id="form-loan">
+    <h3 id="dlg-loan-title">貸出・予約を登録</h3>
+    <label>種別
+      <select id="f-loan-type" name="type">
+        <option value="rent">レンタル（無料で貸す）</option>
+        <option value="borrow">借用（他から借りる）</option>
+      </select>
+    </label>
+    <label>製品<select id="f-loan-item" name="itemId" required></select></label>
+    <label>数量<input id="f-loan-qty" name="qty" type="number" min="1" value="1" required></label>
+    <label>担当者（貸し出した人）<select id="f-loan-staff" name="staff" required></select></label>
+    <label id="new-staff-wrap" hidden>新しい担当者の名前<input id="f-loan-staff-new" placeholder="名前を入力"></label>
+    <label>相手（貸出先・借用元）<input id="f-loan-person" name="person" required placeholder="例：佐藤さん、株式会社ABC"></label>
+    <label>連絡先（任意）<input id="f-loan-contact" name="contact"></label>
+    <div class="row">
+      <label>開始日<input id="f-loan-start" name="start" type="date" required></label>
+      <label>返却予定日<input id="f-loan-end" name="end" type="date" required></label>
+    </div>
+    <p class="hint" id="loan-availability"></p>
+    <label>メモ<textarea id="f-loan-note" name="note" rows="2"></textarea></label>
+    <div class="dlg-actions">
+      <button value="cancel" formnovalidate class="ghost">キャンセル</button>
+      <button value="save" class="primary">保存</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-stock">
+  <form method="dialog" id="form-stock">
+    <h3 id="stock-title">在庫登録</h3>
+    <div class="stock-now" id="stock-now"></div>
+    <label>保有台数（合計）
+      <div class="stepper">
+        <button type="button" id="stock-minus" aria-label="1台減らす">−</button>
+        <input id="f-stock-qty" name="qty" type="number" min="0" inputmode="numeric" required>
+        <button type="button" id="stock-plus" aria-label="1台増やす">＋</button>
+      </div>
+    </label>
+    <p class="hint" id="stock-hint"></p>
+    <label>保管場所<input id="f-stock-location" name="location" placeholder="例：棚A-2"></label>
+    <div class="dlg-actions">
+      <button value="cancel" formnovalidate class="ghost">キャンセル</button>
+      <button value="save" class="primary" id="stock-save">登録</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-confirm">
+  <form method="dialog">
+    <h3 id="confirm-title">確認</h3>
+    <p id="confirm-msg" style="margin:0;white-space:pre-line"></p>
+    <div class="dlg-actions">
+      <button value="cancel" class="ghost">キャンセル</button>
+      <button value="ok" class="primary" id="confirm-ok">削除する</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-who">
+  <form method="dialog" id="form-who">
+    <h3>あなたは誰ですか？</h3>
+    <p class="sub" style="margin:0">選んだ名前で操作の記録が残り、貸出の担当者にも最初から入ります。あとから右上で変えられます。</p>
+    <label>操作する人<select id="f-who" required></select></label>
+    <div class="dlg-actions">
+      <button value="cancel" formnovalidate class="ghost">あとで</button>
+      <button value="save" class="primary">決定</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-settings">
+  <form method="dialog" id="form-settings">
+    <h3>接続設定</h3>
+    <p class="sub" style="margin:0">共有データ（Googleスプレッドシート）の接続先です。通常は管理者が設定済みなので、合言葉だけ入れれば使えます。</p>
+    <label>接続先URL（Apps Script のウェブアプリURL）<input id="f-api" type="url" placeholder="https://script.google.com/macros/s/…/exec"></label>
+    <label>合言葉<input id="f-pass" type="password" autocomplete="off" placeholder="管理者から聞いた合言葉"></label>
+    <p class="hint" id="settings-hint"></p>
+    <div class="dlg-actions">
+      <button value="cancel" formnovalidate class="ghost">キャンセル</button>
+      <button type="button" id="btn-test">接続テスト</button>
+      <button value="save" class="primary">保存</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
 </body>
 </html>
