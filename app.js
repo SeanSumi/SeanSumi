@@ -1,8 +1,10 @@
 'use strict';
 
 /* ========== データ層 ========== */
-const STORE_KEY = 'inventory-rental-app-v1';
-const TYPE_LABEL = { rent: 'レンタル', lend: '貸出', borrow: '借用' };
+const STORE_KEY = 'inventory-rental-app-v2';
+const TYPE_LABEL = { rent: 'レンタル', borrow: '借用' };
+// 初期登録するSKU
+const SKUS = ['Luna Ultra', 'X6', 'X5', 'X4 Air', 'GO Ultra', 'Ace Pro 2'];
 const STATUS_LABEL = { active: '貸出中', upcoming: '予約', overdue: '延滞', returned: '返却済' };
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -10,7 +12,6 @@ const toISO = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDat
 const todayISO = () => toISO(new Date());
 const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + n); return toISO(d); };
 const fmtDate = (iso) => { const [, m, d] = iso.split('-'); return `${+m}/${+d}`; };
-const yen = (n) => (n || n === 0) && n !== '' ? '¥' + Number(n).toLocaleString('ja-JP') : '';
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -19,7 +20,12 @@ let state = load();
 function load() {
   try {
     const raw = localStorage.getItem(STORE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const data = JSON.parse(raw);
+      // 旧形式の「貸出」はレンタル（無料）に統一
+      data.loans.forEach((l) => { if (l.type === 'lend') l.type = 'rent'; delete l.price; });
+      return data;
+    }
   } catch (e) { /* 読み込めない場合はサンプルで開始 */ }
   return sampleData();
 }
@@ -28,24 +34,9 @@ function save() {
 }
 
 function sampleData() {
-  const t = todayISO();
-  const items = [
-    { id: uid(), name: 'ミラーレスカメラ', category: 'カメラ', location: '棚A-1', qty: 3, rate: 3000, note: '' },
-    { id: uid(), name: '三脚', category: 'カメラ', location: '棚A-2', qty: 5, rate: 500, note: '' },
-    { id: uid(), name: 'プロジェクター', category: '映像機器', location: '棚B-1', qty: 2, rate: 4000, note: 'HDMIケーブル付属' },
-    { id: uid(), name: 'テント（4人用）', category: 'アウトドア', location: '倉庫', qty: 4, rate: 2500, note: '' },
-    { id: uid(), name: '電動ドリル', category: '工具', location: '工具箱', qty: 2, rate: 800, note: '' },
-  ];
-  const [cam, tri, proj, tent, drill] = items.map((i) => i.id);
-  const loans = [
-    { id: uid(), type: 'rent', itemId: cam, qty: 1, person: '佐藤さん', contact: '', start: addDays(t, -3), end: addDays(t, 2), price: 15000, note: '', returned: null },
-    { id: uid(), type: 'rent', itemId: proj, qty: 1, person: '株式会社ABC', contact: '', start: addDays(t, -6), end: addDays(t, -1), price: 20000, note: '', returned: null },
-    { id: uid(), type: 'lend', itemId: tri, qty: 2, person: '田中さん', contact: '', start: addDays(t, 0), end: addDays(t, 4), price: '', note: '', returned: null },
-    { id: uid(), type: 'rent', itemId: tent, qty: 3, person: 'キャンプサークル', contact: '', start: addDays(t, 5), end: addDays(t, 8), price: 22500, note: '週末利用', returned: null },
-    { id: uid(), type: 'borrow', itemId: drill, qty: 1, person: '鈴木さん', contact: '', start: addDays(t, -2), end: addDays(t, 6), price: '', note: '借りている物', returned: null },
-    { id: uid(), type: 'rent', itemId: cam, qty: 2, person: '山本さん', contact: '', start: addDays(t, -12), end: addDays(t, -9), price: 18000, note: '', returned: addDays(t, -9) },
-  ];
-  return { items, loans };
+  // 初期SKU（総数は在庫タブの「編集」で実数に変更してください）
+  const items = SKUS.map((name) => ({ id: uid(), name, category: 'カメラ', location: '', qty: 1, note: '' }));
+  return { items, loans: [] };
 }
 
 /* ========== 計算 ========== */
@@ -114,8 +105,8 @@ function renderInventory() {
     totalQty += Number(i.qty); totalOut += out;
     if (Number(i.qty) - out <= 0) soldOut++;
   });
-  $('#inv-summary').innerHTML = stat('品目数', state.items.length) + stat('総在庫数', totalQty) +
-    stat('貸出中', totalOut) + stat('在庫切れ品目', soldOut, soldOut > 0);
+  $('#inv-summary').innerHTML = stat('SKU数', state.items.length) + stat('総在庫数', totalQty) +
+    stat('貸出中', totalOut) + stat('在庫切れSKU', soldOut, soldOut > 0);
 
   $('#inv-body').innerHTML = rows.map((i) => {
     const out = usedOn(i.id, today);
@@ -165,8 +156,8 @@ function openItemDialog(item) {
   editingItemId = item ? item.id : null;
   const f = $('#form-item');
   f.reset();
-  $('#dlg-item-title').textContent = item ? '品目を編集' : '品目を追加';
-  if (item) ['name', 'category', 'location', 'qty', 'rate', 'note'].forEach((k) => (f.elements[k].value = item[k] ?? ''));
+  $('#dlg-item-title').textContent = item ? 'SKUを編集' : 'SKUを追加';
+  if (item) ['name', 'category', 'location', 'qty', 'note'].forEach((k) => (f.elements[k].value = item[k] ?? ''));
   $('#dlg-item').showModal();
 }
 $('#dlg-item').addEventListener('close', () => {
@@ -174,7 +165,6 @@ $('#dlg-item').addEventListener('close', () => {
   const f = $('#form-item');
   const data = Object.fromEntries(new FormData(f));
   data.qty = Number(data.qty);
-  data.rate = data.rate === '' ? '' : Number(data.rate);
   if (editingItemId) Object.assign(itemById(editingItemId), data);
   else state.items.push({ id: uid(), ...data });
   save(); render();
@@ -192,14 +182,14 @@ $('#btn-add-loan').addEventListener('click', () => openLoanDialog());
 
 function renderLoans() {
   const counts = { active: 0, upcoming: 0, overdue: 0, returned: 0 };
-  let monthSales = 0;
+  let monthCount = 0;
   const ym = todayISO().slice(0, 7);
   state.loans.forEach((l) => {
     counts[loanStatus(l)]++;
-    if (l.type === 'rent' && l.price && l.start.slice(0, 7) === ym) monthSales += Number(l.price);
+    if (l.type === 'rent' && l.start.slice(0, 7) === ym) monthCount++;
   });
   $('#loan-summary').innerHTML = stat('貸出中', counts.active) + stat('予約', counts.upcoming) +
-    stat('延滞', counts.overdue, counts.overdue > 0) + stat('今月のレンタル売上', yen(monthSales) || '¥0');
+    stat('延滞', counts.overdue, counts.overdue > 0) + stat('今月のレンタル件数', monthCount);
 
   const order = { overdue: 0, active: 1, upcoming: 2, returned: 3 };
   const rows = state.loans
@@ -220,7 +210,6 @@ function renderLoans() {
       <td class="num">${l.qty}</td>
       <td>${esc(l.person)}${l.contact ? `<div class="sub">${esc(l.contact)}</div>` : ''}</td>
       <td>${fmtDate(l.start)} 〜 ${fmtDate(l.end)}<div class="sub">${remain}</div></td>
-      <td class="num">${yen(l.price)}</td>
       <td class="actions-cell">
         ${!l.returned ? `<button class="small primary" data-act="return" data-id="${l.id}">${l.type === 'borrow' ? '返した' : '返却'}</button>` :
           `<button class="small" data-act="unreturn" data-id="${l.id}">取消</button>`}
@@ -248,20 +237,19 @@ $('#day-detail').addEventListener('click', handleLoanAction);
 
 let editingLoanId = null;
 function openLoanDialog(loan, preset = {}) {
-  if (!state.items.length) { alert('先に在庫タブで品目を登録してください。'); return; }
+  if (!state.items.length) { alert('先に在庫タブでSKUを登録してください。'); return; }
   editingLoanId = loan ? loan.id : null;
   const f = $('#form-loan');
   f.reset();
   $('#dlg-loan-title').textContent = loan ? '貸出を編集' : '貸出・予約を登録';
   f.elements.itemId.innerHTML = state.items.map((i) => `<option value="${i.id}">${esc(i.name)}（総数${i.qty}）</option>`).join('');
   const v = { type: 'rent', qty: 1, start: todayISO(), end: addDays(todayISO(), 2), ...preset, ...(loan || {}) };
-  ['type', 'itemId', 'qty', 'person', 'contact', 'start', 'end', 'price', 'note'].forEach((k) => { if (v[k] !== undefined && v[k] !== null) f.elements[k].value = v[k]; });
-  updateAvailability(!loan);
+  ['type', 'itemId', 'qty', 'person', 'contact', 'start', 'end', 'note'].forEach((k) => { if (v[k] !== undefined && v[k] !== null) f.elements[k].value = v[k]; });
+  updateAvailability();
   $('#dlg-loan').showModal();
 }
 
-let priceTouched = false;
-function updateAvailability(autoPrice) {
+function updateAvailability() {
   const f = $('#form-loan');
   const { itemId, start, end, type } = Object.fromEntries(new FormData(f));
   const qty = Number(f.elements.qty.value);
@@ -280,21 +268,13 @@ function updateAvailability(autoPrice) {
     hint.textContent = `✓ この期間は ${avail} 点まで貸出できます（${days}日間）。`;
     hint.classList.add('ok');
   }
-  const item = itemById(itemId);
-  if (autoPrice && !priceTouched && type === 'rent' && item && item.rate) f.elements.price.value = item.rate * qty * days;
-  if (type !== 'rent' && !priceTouched) f.elements.price.value = '';
 }
-$('#form-loan').addEventListener('input', (e) => {
-  if (e.target.name === 'price') { priceTouched = true; return; }
-  updateAvailability(true);
-});
-$('#form-loan').addEventListener('change', (e) => { if (e.target.tagName === 'SELECT') updateAvailability(true); });
+$('#form-loan').addEventListener('input', updateAvailability);
+$('#form-loan').addEventListener('change', (e) => { if (e.target.tagName === 'SELECT') updateAvailability(); });
 $('#dlg-loan').addEventListener('close', () => {
-  priceTouched = false;
   if ($('#dlg-loan').returnValue !== 'save') return;
   const data = Object.fromEntries(new FormData($('#form-loan')));
   data.qty = Number(data.qty);
-  data.price = data.price === '' ? '' : Number(data.price);
   if (editingLoanId) Object.assign(state.loans.find((l) => l.id === editingLoanId), data);
   else state.loans.push({ id: uid(), returned: null, ...data });
   save(); render();
